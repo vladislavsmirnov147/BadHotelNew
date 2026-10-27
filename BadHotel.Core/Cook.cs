@@ -6,6 +6,8 @@ public class Cook : HotelWorker, ICook, IServe
     {
     }
 
+
+
     public override string Work()
     {
         if (!TryUseEnergy(10))
