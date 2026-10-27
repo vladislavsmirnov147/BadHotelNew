@@ -1,5 +1,7 @@
-﻿using System.Collections.ObjectModel;
+﻿
+using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using BadHotel.Core;
 
@@ -15,12 +17,25 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly RepositoryReactions<Cleaner> _cleanerReactions;
     private readonly RepositoryReactions<Cook> _cookReactions;
 
+    private readonly CalculationService _arvutusteenus = new();
+
+    private CancellationTokenSource? _tuhistamiseAllikas;
+
     private string _newWorkerName = string.Empty;
     private string? _selectedWorkerType;
     private string _selectedRepository = "All";
     private HotelWorker? _selectedWorker;
     private string _searchText = string.Empty;
     private bool _sortByName;
+
+    private bool _neetudTubaValitud = true;
+    private bool _kummituslikLiftValitud = true;
+    private bool _neetudPeegelValitud = true;
+    private bool _veaTest;
+    private string _valitudReziim = "Järjestikune";
+    private int _arvutusteMaht = 10000000;
+    private bool _arvutusKaib;
+    private string _koguAeg = "Arvutusi pole veel tehtud.";
 
     public ObservableCollection<HotelWorker> Workers { get; } = new();
 
@@ -43,6 +58,14 @@ public class MainViewModel : INotifyPropertyChanged
         "Receptionist",
         "Cleaner",
         "Cook"
+    };
+
+    public ObservableCollection<string> Arvutustulemused { get; } = new();
+
+    public ObservableCollection<string> Arvutusreziimid { get; } = new()
+    {
+        "Järjestikune",
+        "Paralleelne"
     };
 
     public string NewWorkerName
@@ -115,15 +138,99 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    public bool NeetudTubaValitud
+    {
+        get => _neetudTubaValitud;
+        set
+        {
+            _neetudTubaValitud = value;
+            OnPropertyChanged();
+            UuendaArvutuskaske();
+        }
+    }
+
+    public bool KummituslikLiftValitud
+    {
+        get => _kummituslikLiftValitud;
+        set
+        {
+            _kummituslikLiftValitud = value;
+            OnPropertyChanged();
+            UuendaArvutuskaske();
+        }
+    }
+
+    public bool NeetudPeegelValitud
+    {
+        get => _neetudPeegelValitud;
+        set
+        {
+            _neetudPeegelValitud = value;
+            OnPropertyChanged();
+            UuendaArvutuskaske();
+        }
+    }
+
+    public bool VeaTest
+    {
+        get => _veaTest;
+        set
+        {
+            _veaTest = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string ValitudReziim
+    {
+        get => _valitudReziim;
+        set
+        {
+            _valitudReziim = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int ArvutusteMaht
+    {
+        get => _arvutusteMaht;
+        set
+        {
+            _arvutusteMaht = value;
+            OnPropertyChanged();
+            UuendaArvutuskaske();
+        }
+    }
+
+    public bool ArvutusKaib
+    {
+        get => _arvutusKaib;
+        private set
+        {
+            _arvutusKaib = value;
+            OnPropertyChanged();
+            UuendaArvutuskaske();
+        }
+    }
+
+    public string KoguAeg
+    {
+        get => _koguAeg;
+        private set
+        {
+            _koguAeg = value;
+            OnPropertyChanged();
+        }
+    }
+
     public RelayCommand AddCommand { get; }
-
     public RelayCommand WorkCommand { get; }
-
     public RelayCommand SpecialAbilityCommand { get; }
-
     public RelayCommand RemoveCommand { get; }
-
     public RelayCommand CrazyActionCommand { get; }
+
+    public RelayCommand AlustaArvutustCommand { get; }
+    public RelayCommand TuhistaArvutusCommand { get; }
 
     public MainViewModel()
     {
@@ -158,13 +265,141 @@ public class MainViewModel : INotifyPropertyChanged
             DoCrazyAction,
             () => SelectedWorker is not null);
 
+        AlustaArvutustCommand = new RelayCommand(
+            () => _ = AlustaArvutustAsync(),
+            SaabArvutustAlustada);
+
+        TuhistaArvutusCommand = new RelayCommand(
+            TuhistaArvutus,
+            () => ArvutusKaib);
+
         UpdateDisplayedWorkers();
         UpdateWorkerSummary();
     }
 
-    private void AddReactionToLog(string message)
+    private void UuendaArvutuskaske()
     {
-        ActivityLog.Add(message);
+        AlustaArvutustCommand.RaiseCanExecuteChanged();
+        TuhistaArvutusCommand.RaiseCanExecuteChanged();
+    }
+
+    private bool SaabArvutustAlustada()
+    {
+        return !ArvutusKaib
+            && ArvutusteMaht > 0
+            && (NeetudTubaValitud
+                || KummituslikLiftValitud
+                || NeetudPeegelValitud);
+    }
+
+    private List<CalculationSnapshot> LooArvutusteAndmed()
+    {
+        List<CalculationSnapshot> andmed = new();
+
+        if (NeetudTubaValitud)
+        {
+            andmed.Add(new CalculationSnapshot(
+                "Tuba 13",
+                "Neetud tuba",
+                ArvutusteMaht,
+                7,
+                13));
+        }
+
+        if (KummituslikLiftValitud)
+        {
+            andmed.Add(new CalculationSnapshot(
+                "Hotelli lift",
+                "Kummituslik lift",
+                ArvutusteMaht,
+                8,
+                VeaTest ? 1 : 12));
+        }
+
+        if (NeetudPeegelValitud)
+        {
+            andmed.Add(new CalculationSnapshot(
+                "Vana peegel",
+                "Neetud peegel",
+                ArvutusteMaht,
+                9,
+                25));
+        }
+
+        return andmed;
+    }
+
+    private async Task AlustaArvutustAsync()
+    {
+        if (!SaabArvutustAlustada())
+            return;
+
+        List<CalculationSnapshot> andmed = LooArvutusteAndmed();
+
+        _tuhistamiseAllikas = new CancellationTokenSource();
+
+        CancellationToken tuhistamiseToken =
+            _tuhistamiseAllikas.Token;
+
+        ArvutusKaib = true;
+        Arvutustulemused.Clear();
+        KoguAeg = "Arvutamine käib...";
+
+        Stopwatch stopper = Stopwatch.StartNew();
+
+        try
+        {
+            List<CalculationResult> tulemused;
+
+            if (ValitudReziim == "Paralleelne")
+            {
+                tulemused = await _arvutusteenus.RunParallelAsync(
+                    andmed,
+                    tuhistamiseToken);
+            }
+            else
+            {
+                tulemused = await _arvutusteenus.RunSequentialAsync(
+                    andmed,
+                    tuhistamiseToken);
+            }
+
+            foreach (CalculationResult tulemus in tulemused)
+            {
+                Arvutustulemused.Add(
+                    $"Objekt: {tulemus.ObjectName}\n" +
+                    $"Olek: {tulemus.Status}\n" +
+                    $"Tulemus: {tulemus.Result}\n" +
+                    $"Kestus: {tulemus.DurationMilliseconds} ms");
+            }
+        }
+        catch (Exception ex)
+        {
+            Arvutustulemused.Add($"Viga: {ex.Message}");
+        }
+        finally
+        {
+            stopper.Stop();
+
+            KoguAeg =
+                $"Režiim: {ValitudReziim}. " +
+                $"Koguaeg: {stopper.ElapsedMilliseconds} ms";
+
+            ArvutusKaib = false;
+
+            _tuhistamiseAllikas?.Dispose();
+            _tuhistamiseAllikas = null;
+        }
+    }
+
+    private void TuhistaArvutus()
+    {
+        _tuhistamiseAllikas?.Cancel();
+    }
+
+    private void AddReactionToLog(string teade)
+    {
+        ActivityLog.Add(teade);
     }
 
     private bool CanAddWorker()
@@ -175,35 +410,35 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void AddWorker()
     {
-        string name = NewWorkerName.Trim();
+        string nimi = NewWorkerName.Trim();
 
         switch (SelectedWorkerType)
         {
             case "Receptionist":
-                Receptionist receptionist = new(name);
-                _receptionists.Add(receptionist);
-                Workers.Add(receptionist);
+                Receptionist vastuvotutootaja = new(nimi);
+                _receptionists.Add(vastuvotutootaja);
+                Workers.Add(vastuvotutootaja);
                 ActivityLog.Add(
-                    $"{receptionist.Name} joined the hotel as Receptionist.");
-                SelectedWorker = receptionist;
+                    $"{vastuvotutootaja.Name} alustas tööd vastuvõtutöötajana.");
+                SelectedWorker = vastuvotutootaja;
                 break;
 
             case "Cleaner":
-                Cleaner cleaner = new(name);
-                _cleaners.Add(cleaner);
-                Workers.Add(cleaner);
+                Cleaner koristaja = new(nimi);
+                _cleaners.Add(koristaja);
+                Workers.Add(koristaja);
                 ActivityLog.Add(
-                    $"{cleaner.Name} joined the hotel as Cleaner.");
-                SelectedWorker = cleaner;
+                    $"{koristaja.Name} alustas tööd koristajana.");
+                SelectedWorker = koristaja;
                 break;
 
             case "Cook":
-                Cook cook = new(name);
-                _cooks.Add(cook);
-                Workers.Add(cook);
+                Cook kokk = new(nimi);
+                _cooks.Add(kokk);
+                Workers.Add(kokk);
                 ActivityLog.Add(
-                    $"{cook.Name} joined the hotel as Cook.");
-                SelectedWorker = cook;
+                    $"{kokk.Name} alustas tööd kokana.");
+                SelectedWorker = kokk;
                 break;
         }
 
@@ -217,9 +452,7 @@ public class MainViewModel : INotifyPropertyChanged
     private void DoWork()
     {
         if (SelectedWorker is null)
-        {
             return;
-        }
 
         ActivityLog.Add(SelectedWorker.Work());
     }
@@ -227,55 +460,55 @@ public class MainViewModel : INotifyPropertyChanged
     private void DoSpecialAbility()
     {
         if (SelectedWorker is null)
-        {
             return;
-        }
 
-        string message;
+        string teade;
 
-        if (SelectedWorker is ICook cook)
+        if (SelectedWorker is ICook kokk)
         {
-            message = cook.CookMeal();
+            teade = kokk.CookMeal();
         }
-        else if (SelectedWorker is IClean cleaner)
+        else if (SelectedWorker is IClean koristaja)
         {
-            message = cleaner.CleanRoom();
+            teade = koristaja.CleanRoom();
         }
-        else if (SelectedWorker is IServe server)
+        else if (SelectedWorker is IServe teenindaja)
         {
-            message = server.ServeGuest();
+            teade = teenindaja.ServeGuest();
         }
         else
         {
-            message = $"{SelectedWorker.Name} has no special ability.";
+            teade = $"{SelectedWorker.Name} ei oma erivõimet.";
         }
 
-        ActivityLog.Add(message);
+        ActivityLog.Add(teade);
     }
 
     private void RemoveWorker()
     {
-        if (SelectedWorker is Receptionist receptionist)
+        if (SelectedWorker is Receptionist vastuvotutootaja)
         {
-            _receptionists.Remove(receptionist);
+            _receptionists.Remove(vastuvotutootaja);
         }
-        else if (SelectedWorker is Cleaner cleaner)
+        else if (SelectedWorker is Cleaner koristaja)
         {
-            _cleaners.Remove(cleaner);
+            _cleaners.Remove(koristaja);
         }
-        else if (SelectedWorker is Cook cook)
+        else if (SelectedWorker is Cook kokk)
         {
-            _cooks.Remove(cook);
+            _cooks.Remove(kokk);
         }
         else
         {
             return;
         }
 
-        HotelWorker removedWorker = SelectedWorker;
+        HotelWorker eemaldatudTootaja = SelectedWorker;
 
-        Workers.Remove(removedWorker);
-        ActivityLog.Add($"{removedWorker.Name} left the Bad Hotel.");
+        Workers.Remove(eemaldatudTootaja);
+
+        ActivityLog.Add(
+            $"{eemaldatudTootaja.Name} lahkus hotellist.");
 
         SelectedWorker = null;
 
@@ -285,65 +518,65 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void DoCrazyAction()
     {
-        if (SelectedWorker is Receptionist receptionist)
+        if (SelectedWorker is Receptionist vastuvotutootaja)
         {
             ActivityLog.Add(
-                _receptionists.PerformCrazyAction(receptionist));
+                _receptionists.PerformCrazyAction(vastuvotutootaja));
         }
-        else if (SelectedWorker is Cleaner cleaner)
+        else if (SelectedWorker is Cleaner koristaja)
         {
             ActivityLog.Add(
-                _cleaners.PerformCrazyAction(cleaner));
+                _cleaners.PerformCrazyAction(koristaja));
         }
-        else if (SelectedWorker is Cook cook)
+        else if (SelectedWorker is Cook kokk)
         {
             ActivityLog.Add(
-                _cooks.PerformCrazyAction(cook));
+                _cooks.PerformCrazyAction(kokk));
         }
     }
 
     private void UpdateDisplayedWorkers()
     {
-        IEnumerable<HotelWorker> result = Workers;
+        IEnumerable<HotelWorker> tulemus = Workers;
 
         if (SelectedRepository != "All")
         {
-            result = result.Where(
-                worker => worker.GetType().Name == SelectedRepository);
+            tulemus = tulemus.Where(
+                tootaja => tootaja.GetType().Name == SelectedRepository);
         }
 
         if (!string.IsNullOrWhiteSpace(SearchText))
         {
-            result = result.Where(
-                worker => worker.Name.Contains(
+            tulemus = tulemus.Where(
+                tootaja => tootaja.Name.Contains(
                     SearchText,
                     StringComparison.OrdinalIgnoreCase));
         }
 
         if (SortByName)
         {
-            result = result.OrderBy(worker => worker.Name);
+            tulemus = tulemus.OrderBy(tootaja => tootaja.Name);
         }
 
         DisplayedWorkers.Clear();
 
-        foreach (HotelWorker worker in result)
+        foreach (HotelWorker tootaja in tulemus)
         {
-            DisplayedWorkers.Add(worker);
+            DisplayedWorkers.Add(tootaja);
         }
     }
 
     private void UpdateWorkerSummary()
     {
-        var groups = Workers
-            .GroupBy(worker => worker.GetType().Name)
-            .OrderBy(group => group.Key);
+        var grupid = Workers
+            .GroupBy(tootaja => tootaja.GetType().Name)
+            .OrderBy(grupp => grupp.Key);
 
         WorkerSummary.Clear();
 
-        foreach (var group in groups)
+        foreach (var grupp in grupid)
         {
-            WorkerSummary.Add($"{group.Key}: {group.Count()}");
+            WorkerSummary.Add($"{grupp.Key}: {grupp.Count()}");
         }
     }
 

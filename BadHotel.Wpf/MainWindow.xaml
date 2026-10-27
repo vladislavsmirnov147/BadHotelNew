@@ -2,176 +2,276 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Bad Hotel"
-        Height="760"
-        Width="950"
+        Height="850"
+        Width="1050"
+        MinHeight="650"
+        MinWidth="850"
         WindowStartupLocation="CenterScreen">
 
-    <Grid Margin="20">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="170"/>
-        </Grid.RowDefinitions>
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Auto">
 
-        <TextBlock Grid.Row="0"
-                   Text="BAD HOTEL"
-                   FontSize="30"
-                   FontWeight="Bold"
-                   HorizontalAlignment="Center"
-                   Margin="0,0,0,20"/>
+        <Grid Margin="20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="330"/>
+                <RowDefinition Height="170"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="1"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Center"
-                    Margin="0,0,0,10">
+            <TextBlock Grid.Row="0"
+                       Text="BAD HOTEL"
+                       FontSize="30"
+                       FontWeight="Bold"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,20"/>
 
-            <TextBlock Text="Name:"
-                       VerticalAlignment="Center"
-                       Margin="5"/>
+            <StackPanel Grid.Row="1"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Margin="0,0,0,10">
 
-            <TextBox Width="160"
-                     Margin="5"
-                     Text="{Binding NewWorkerName, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock Text="Nimi:"
+                           VerticalAlignment="Center"
+                           Margin="5"/>
 
-            <TextBlock Text="Worker type:"
-                       VerticalAlignment="Center"
-                       Margin="5"/>
+                <TextBox Width="160"
+                         Margin="5"
+                         Text="{Binding NewWorkerName, UpdateSourceTrigger=PropertyChanged}"/>
 
-            <ComboBox Width="150"
-                      Margin="5"
-                      ItemsSource="{Binding WorkerTypes}"
-                      SelectedItem="{Binding SelectedWorkerType}"/>
+                <TextBlock Text="Töötaja tüüp:"
+                           VerticalAlignment="Center"
+                           Margin="5"/>
 
-            <Button Content="Add worker"
-                    Width="100"
-                    Margin="5"
-                    Command="{Binding AddCommand}"/>
-        </StackPanel>
+                <ComboBox Width="150"
+                          Margin="5"
+                          ItemsSource="{Binding WorkerTypes}"
+                          SelectedItem="{Binding SelectedWorkerType}"/>
 
-        <StackPanel Grid.Row="2"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Center"
-                    Margin="0,0,0,10">
+                <Button Content="Lisa töötaja"
+                        Width="110"
+                        Margin="5"
+                        Command="{Binding AddCommand}"/>
+            </StackPanel>
 
-            <TextBlock Text="Repository:"
-                       VerticalAlignment="Center"
-                       Margin="5"/>
+            <StackPanel Grid.Row="2"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Margin="0,0,0,10">
 
-            <ComboBox Width="130"
-                      Margin="5"
-                      ItemsSource="{Binding RepositoryTypes}"
-                      SelectedItem="{Binding SelectedRepository}"/>
+                <TextBlock Text="Hoidla:"
+                           VerticalAlignment="Center"
+                           Margin="5"/>
 
-            <TextBlock Text="Search:"
-                       VerticalAlignment="Center"
-                       Margin="10,5,5,5"/>
+                <ComboBox Width="130"
+                          Margin="5"
+                          ItemsSource="{Binding RepositoryTypes}"
+                          SelectedItem="{Binding SelectedRepository}"/>
 
-            <TextBox Width="180"
-                     Margin="5"
-                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock Text="Otsi:"
+                           VerticalAlignment="Center"
+                           Margin="10,5,5,5"/>
 
-            <CheckBox Content="Sort A-Z"
-                      VerticalAlignment="Center"
-                      Margin="15,5,5,5"
-                      IsChecked="{Binding SortByName}"/>
-        </StackPanel>
+                <TextBox Width="180"
+                         Margin="5"
+                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"/>
 
-        <Grid Grid.Row="3">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="2*"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+                <CheckBox Content="Sorteeri A–Z"
+                          VerticalAlignment="Center"
+                          Margin="15,5,5,5"
+                          IsChecked="{Binding SortByName}"/>
+            </StackPanel>
 
-            <GroupBox Grid.Column="0"
-                      Header="Hotel workers"
+            <Grid Grid.Row="3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <GroupBox Grid.Column="0"
+                          Header="Hotelli töötajad"
+                          Margin="5">
+
+                    <ListBox Margin="10"
+                             ItemsSource="{Binding DisplayedWorkers}"
+                             SelectedItem="{Binding SelectedWorker}">
+
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="3">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontWeight="Bold"/>
+
+                                    <TextBlock Text="{Binding Energy, StringFormat=Energia: {0}/100}"
+                                               FontSize="12"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </GroupBox>
+
+                <GroupBox Grid.Column="1"
+                          Header="Valitud töötaja"
+                          Margin="5">
+
+                    <StackPanel Margin="15">
+
+                        <TextBlock Text="Nimi:"
+                                   FontWeight="Bold"/>
+
+                        <TextBlock Text="{Binding SelectedWorker.Name, TargetNullValue=Ühtegi töötajat pole valitud}"
+                                   FontSize="18"
+                                   Margin="0,3,0,10"/>
+
+                        <TextBlock Text="Energia:"
+                                   FontWeight="Bold"/>
+
+                        <TextBlock Text="{Binding SelectedWorker.Energy, StringFormat={}{0}/100, TargetNullValue=-}"
+                                   Margin="0,3,0,5"/>
+
+                        <ProgressBar Minimum="0"
+                                     Maximum="100"
+                                     Height="25"
+                                     Value="{Binding SelectedWorker.Energy, Mode=OneWay}"
+                                     Margin="0,0,0,15"/>
+
+                        <Button Content="Tööta"
+                                Height="35"
+                                Margin="0,5"
+                                Command="{Binding WorkCommand}"/>
+
+                        <Button Content="Erivõime"
+                                Height="35"
+                                Margin="0,5"
+                                Command="{Binding SpecialAbilityCommand}"/>
+
+                        <Button Content="HULL TEGEVUS!"
+                                Height="35"
+                                Margin="0,5"
+                                Command="{Binding CrazyActionCommand}"/>
+
+                        <Button Content="Eemalda töötaja"
+                                Height="35"
+                                Margin="0,5"
+                                Command="{Binding RemoveCommand}"/>
+
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Grid.Column="2"
+                          Header="Töötajate kokkuvõte"
+                          Margin="5">
+
+                    <ListBox Margin="10"
+                             ItemsSource="{Binding WorkerSummary}"/>
+
+                </GroupBox>
+            </Grid>
+
+            <GroupBox Grid.Row="4"
+                      Header="Tegevuste logi"
                       Margin="5">
 
                 <ListBox Margin="10"
-                         ItemsSource="{Binding DisplayedWorkers}"
-                         SelectedItem="{Binding SelectedWorker}">
-
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Margin="3">
-                                <TextBlock Text="{Binding Name}"
-                                           FontWeight="Bold"/>
-                                <TextBlock Text="{Binding Energy, StringFormat=Energy: {0}/100}"
-                                           FontSize="12"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-
-                </ListBox>
+                         ItemsSource="{Binding ActivityLog}"/>
             </GroupBox>
 
-            <GroupBox Grid.Column="1"
-                      Header="Selected worker"
-                      Margin="5">
+            <GroupBox Grid.Row="5"
+                      Header="Paranormaalsed arvutused"
+                      Margin="5,15,5,5">
 
                 <StackPanel Margin="15">
 
-                    <TextBlock Text="Name:"
-                               FontWeight="Bold"/>
+                    <TextBlock Text="Vali arvutatavad objektid:"
+                               FontWeight="Bold"
+                               Margin="0,0,0,10"/>
 
-                    <TextBlock Text="{Binding SelectedWorker.Name, TargetNullValue=No worker selected}"
-                               FontSize="18"
-                               Margin="0,3,0,10"/>
+                    <WrapPanel Margin="0,0,0,15">
 
-                    <TextBlock Text="Energy:"
-                               FontWeight="Bold"/>
+                        <CheckBox Content="Neetud tuba"
+                                  IsChecked="{Binding NeetudTubaValitud}"
+                                  Margin="0,0,25,5"/>
 
-                    <TextBlock Text="{Binding SelectedWorker.Energy, StringFormat={}{0}/100, TargetNullValue=-}"
-                               Margin="0,3,0,5"/>
+                        <CheckBox Content="Kummituslik lift"
+                                  IsChecked="{Binding KummituslikLiftValitud}"
+                                  Margin="0,0,25,5"/>
 
-                    <ProgressBar Minimum="0"
-                                 Maximum="100"
-                                 Height="25"
-                                 Value="{Binding SelectedWorker.Energy, Mode=OneWay}"
-                                 Margin="0,0,0,15"/>
+                        <CheckBox Content="Neetud peegel"
+                                  IsChecked="{Binding NeetudPeegelValitud}"
+                                  Margin="0,0,25,5"/>
 
-                    <Button Content="Work"
-                            Height="35"
-                            Margin="0,5"
-                            Command="{Binding WorkCommand}"/>
+                    </WrapPanel>
 
-                    <Button Content="Special ability"
-                            Height="35"
-                            Margin="0,5"
-                            Command="{Binding SpecialAbilityCommand}"/>
+                    <WrapPanel Margin="0,0,0,15">
 
-                    <Button Content="CRAZY ACTION!"
-                            Height="35"
-                            Margin="0,5"
-                            Command="{Binding CrazyActionCommand}"/>
+                        <TextBlock Text="Arvutusrežiim:"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0"/>
 
-                    <Button Content="Remove worker"
-                            Height="35"
-                            Margin="0,5"
-                            Command="{Binding RemoveCommand}"/>
+                        <ComboBox Width="160"
+                                  ItemsSource="{Binding Arvutusreziimid}"
+                                  SelectedItem="{Binding ValitudReziim}"
+                                  Margin="0,0,25,0"/>
+
+                        <TextBlock Text="Arvutuste maht:"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0"/>
+
+                        <TextBox Width="130"
+                                 Text="{Binding ArvutusteMaht, UpdateSourceTrigger=LostFocus}"
+                                 Margin="0,0,10,0"/>
+
+                    </WrapPanel>
+
+                    <CheckBox Content="Vea test (lifti vea kontroll)"
+                              IsChecked="{Binding VeaTest, Mode=TwoWay}"
+                              Margin="0,0,0,15"
+                              FontWeight="SemiBold"/>
+
+                    <WrapPanel Margin="0,0,0,15">
+
+                        <Button Content="Alusta arvutust"
+                                Width="150"
+                                Height="35"
+                                Margin="0,0,15,0"
+                                Command="{Binding AlustaArvutustCommand}"/>
+
+                        <Button Content="Tühista"
+                                Width="120"
+                                Height="35"
+                                Command="{Binding TuhistaArvutusCommand}"/>
+
+                    </WrapPanel>
+
+                    <TextBlock Text="{Binding KoguAeg}"
+                               FontWeight="Bold"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,10"/>
+
+                    <TextBlock Text="Arvutustulemused:"
+                               FontWeight="Bold"
+                               Margin="0,0,0,10"/>
+
+                    <ListBox ItemsSource="{Binding Arvutustulemused}"
+                             Height="250"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}"
+                                           TextWrapping="Wrap"
+                                           Margin="5"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+
+                    </ListBox>
 
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox Grid.Column="2"
-                      Header="Worker summary"
-                      Margin="5">
-
-                <ListBox Margin="10"
-                         ItemsSource="{Binding WorkerSummary}"/>
-
-            </GroupBox>
         </Grid>
-
-        <GroupBox Grid.Row="4"
-                  Header="Activity log"
-                  Margin="5">
-
-            <ListBox Margin="10"
-                     ItemsSource="{Binding ActivityLog}"/>
-        </GroupBox>
-
-    </Grid>
+    </ScrollViewer>
 </Window>
