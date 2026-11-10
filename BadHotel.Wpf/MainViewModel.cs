@@ -3,19 +3,23 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using BadHotel.Core;
+using Microsoft.Win32;
 
 namespace BadHotel.Wpf;
 
 public class MainViewModel : INotifyPropertyChanged
 {
-    private readonly Repository<Receptionist> _receptionists = new();
-    private readonly Repository<Cleaner> _cleaners = new();
-    private readonly Repository<Cook> _cooks = new();
+    private readonly WorldStorageService _storageService;
 
-    private readonly RepositoryReactions<Receptionist> _receptionistReactions;
-    private readonly RepositoryReactions<Cleaner> _cleanerReactions;
-    private readonly RepositoryReactions<Cook> _cookReactions;
+    private Repository<Receptionist> _receptionists = new();
+    private Repository<Cleaner> _cleaners = new();
+    private Repository<Cook> _cooks = new();
+
+    private RepositoryReactions<Receptionist> _receptionistReactions;
+    private RepositoryReactions<Cleaner> _cleanerReactions;
+    private RepositoryReactions<Cook> _cookReactions;
 
     private readonly CalculationService _arvutusteenus = new();
 
@@ -27,6 +31,7 @@ public class MainViewModel : INotifyPropertyChanged
     private HotelWorker? _selectedWorker;
     private string _searchText = string.Empty;
     private bool _sortByName;
+    private bool _storageBusy;
 
     private bool _neetudTubaValitud = true;
     private bool _kummituslikLiftValitud = true;
@@ -232,8 +237,16 @@ public class MainViewModel : INotifyPropertyChanged
     public RelayCommand AlustaArvutustCommand { get; }
     public RelayCommand TuhistaArvutusCommand { get; }
 
-    public MainViewModel()
+    public RelayCommand SaveWorldCommand { get; }
+    public RelayCommand LoadWorldCommand { get; }
+    public RelayCommand SaveDatabaseCommand { get; }
+    public RelayCommand LoadDatabaseCommand { get; }
+
+    public MainViewModel(WorldStorageService storageService)
     {
+        _storageService = storageService
+            ?? throw new ArgumentNullException(nameof(storageService));
+
         _receptionistReactions =
             new RepositoryReactions<Receptionist>(_receptionists);
 
@@ -273,8 +286,229 @@ public class MainViewModel : INotifyPropertyChanged
             TuhistaArvutus,
             () => ArvutusKaib);
 
+        SaveWorldCommand = new RelayCommand(
+            () => _ = SaveWorldAsync(),
+            () => !_storageBusy);
+
+        LoadWorldCommand = new RelayCommand(
+            () => _ = LoadWorldAsync(),
+            () => !_storageBusy);
+
+        SaveDatabaseCommand = new RelayCommand(
+            () => _ = SaveDatabaseAsync(),
+            () => !_storageBusy);
+
+        LoadDatabaseCommand = new RelayCommand(
+            () => _ = LoadDatabaseAsync(),
+            () => !_storageBusy);
+
         UpdateDisplayedWorkers();
         UpdateWorkerSummary();
+    }
+
+    private void SetStorageBusy(bool busy)
+    {
+        _storageBusy = busy;
+
+        SaveWorldCommand.RaiseCanExecuteChanged();
+        LoadWorldCommand.RaiseCanExecuteChanged();
+        SaveDatabaseCommand.RaiseCanExecuteChanged();
+        LoadDatabaseCommand.RaiseCanExecuteChanged();
+    }
+
+    private async Task SaveWorldAsync()
+    {
+        if (_storageBusy)
+            return;
+
+        SaveFileDialog dialog = new()
+        {
+            Title = "Salvesta hotelli maailm",
+            Filter = "JSON-failid (*.json)|*.json|XML-failid (*.xml)|*.xml",
+            DefaultExt = ".json",
+            AddExtension = true,
+            FileName = "BadHotelWorld.json"
+        };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        await SaveToStorageAsync(
+            dialog.FileName,
+            $"Maailm salvestati faili: {dialog.FileName}");
+    }
+
+    private async Task SaveDatabaseAsync()
+    {
+        if (_storageBusy)
+            return;
+
+        await SaveToStorageAsync(
+            "BadHotelWorld.db",
+            "Maailm salvestati LocalDB andmebaasi.");
+    }
+
+    private async Task SaveToStorageAsync(
+        string storagePath,
+        string successLog)
+    {
+        SetStorageBusy(true);
+
+        try
+        {
+            WorldDto world = WorldMapper.ToDto(Workers);
+
+            await _storageService.SaveAsync(storagePath, world);
+
+            ActivityLog.Add(successLog);
+
+            MessageBox.Show(
+                "Maailm salvestati edukalt.",
+                "Salvestamine",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ActivityLog.Add($"Salvestamise viga: {ex.Message}");
+
+            MessageBox.Show(
+                $"Maailma salvestamine ebaõnnestus.\n{ex.Message}",
+                "Salvestamise viga",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            SetStorageBusy(false);
+        }
+    }
+
+    private async Task LoadWorldAsync()
+    {
+        if (_storageBusy)
+            return;
+
+        OpenFileDialog dialog = new()
+        {
+            Title = "Laadi hotelli maailm",
+            Filter = "Maailma failid (*.json;*.xml)|*.json;*.xml|JSON-failid (*.json)|*.json|XML-failid (*.xml)|*.xml",
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        await LoadFromStorageAsync(
+            dialog.FileName,
+            $"Maailm laaditi failist: {dialog.FileName}");
+    }
+
+    private async Task LoadDatabaseAsync()
+    {
+        if (_storageBusy)
+            return;
+
+        await LoadFromStorageAsync(
+            "BadHotelWorld.db",
+            "Maailm laaditi LocalDB andmebaasist.");
+    }
+
+    private async Task LoadFromStorageAsync(
+        string storagePath,
+        string successLog)
+    {
+        SetStorageBusy(true);
+
+        try
+        {
+            WorldDto world =
+                await _storageService.LoadAsync(storagePath);
+
+            List<HotelWorker> loadedWorkers =
+                WorldMapper.FromDto(world);
+
+            Repository<Receptionist> newReceptionists = new();
+            Repository<Cleaner> newCleaners = new();
+            Repository<Cook> newCooks = new();
+
+            foreach (HotelWorker worker in loadedWorkers)
+            {
+                switch (worker)
+                {
+                    case Receptionist receptionist:
+                        newReceptionists.Add(receptionist);
+                        break;
+
+                    case Cleaner cleaner:
+                        newCleaners.Add(cleaner);
+                        break;
+
+                    case Cook cook:
+                        newCooks.Add(cook);
+                        break;
+                }
+            }
+
+            RepositoryReactions<Receptionist> newReceptionistReactions =
+                new(newReceptionists);
+
+            RepositoryReactions<Cleaner> newCleanerReactions =
+                new(newCleaners);
+
+            RepositoryReactions<Cook> newCookReactions =
+                new(newCooks);
+
+            _receptionistReactions.ReactionCreated -= AddReactionToLog;
+            _cleanerReactions.ReactionCreated -= AddReactionToLog;
+            _cookReactions.ReactionCreated -= AddReactionToLog;
+
+            _receptionists = newReceptionists;
+            _cleaners = newCleaners;
+            _cooks = newCooks;
+
+            _receptionistReactions = newReceptionistReactions;
+            _cleanerReactions = newCleanerReactions;
+            _cookReactions = newCookReactions;
+
+            _receptionistReactions.ReactionCreated += AddReactionToLog;
+            _cleanerReactions.ReactionCreated += AddReactionToLog;
+            _cookReactions.ReactionCreated += AddReactionToLog;
+
+            SelectedWorker = null;
+
+            Workers.Clear();
+
+            foreach (HotelWorker worker in loadedWorkers)
+            {
+                Workers.Add(worker);
+            }
+
+            UpdateDisplayedWorkers();
+            UpdateWorkerSummary();
+
+            ActivityLog.Add(successLog);
+
+            MessageBox.Show(
+                "Maailm laaditi edukalt.",
+                "Laadimine",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ActivityLog.Add($"Laadimise viga: {ex.Message}");
+
+            MessageBox.Show(
+                $"Maailma laadimine ebaõnnestus.\n{ex.Message}",
+                "Laadimise viga",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            SetStorageBusy(false);
+        }
     }
 
     private void UuendaArvutuskaske()
