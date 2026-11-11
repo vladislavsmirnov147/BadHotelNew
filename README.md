@@ -145,6 +145,196 @@ Selle töö käigus õppisin päris palju uusi asju. Sain teada, kuidas töötav
 Alguses tundus Vol.4 mulle päris raske, sest uusi asju oli korraga väga palju. Vahepeal ei saanud ma üldse aru, mida järgmisena tegema pean. Aga kui hakkasin kõike väikeste sammudena tegema, läks asi palju selgemaks. Kõige rohkem meeldis mulle see hetk, kui kustutasin Mari ära ja sain ta andmebaasist tagasi laadida. Nüüd on minu hull hotell juba päris korralik programm, sest lisaks töötajate haldamisele ja paranormaalsetele arvutustele oskab see ka oma maailma meelde jätta.
 
 
+FUNKTSIOONID
+
+Rakendus sisaldab praegu järgmisi võimalusi:
+
+- Hotelli töötajate lisamine ja eemaldamine.
+- Kolm töötajatüüpi: administraator, koristaja ja kokk.
+- Iga töötaja jaoks erinevad ülesanded ja eriomadused.
+- Energiasüsteem, mis muutub töötajate tegevuse käigus.
+- Töötajate omavahelised reaktsioonid.
+- Töötajate otsimine ja sortimine nime järgi.
+- Töötajate filtreerimine tüübi järgi.
+- Töötajate rühmitamine atribuudi `Grupp` kaudu.
+- Tegevuslogi, mis näitab, mis hotellis toimub.
+- Järjestikused ja paralleelsed paranormaalsed arvutused.
+- Käimasolevate arvutuste tühistamine.
+- Hotelliandmete salvestamine ja laadimine JSON-vormingus.
+- Hotelliandmete salvestamine ja laadimine SQL Server LocalDB abil.
+
+TEHNOLOOGIAD
+
+Projekt kasutab järgmisi tehnoloogiaid:
+
+- C# – rakenduse loogika.
+- WPF – töölauarakenduse kasutajaliides.
+- .NET – rakendusplatvorm.
+- Entity Framework Core – andmebaasiga suhtlemine ja objekt-relatsiooniline kaardistamine.
+- SQL Server LocalDB – kohalike andmete salvestamine.
+- Microsoft.Extensions.DependencyInjection – sõltuvuste süstimine.
+- System.Text.Json – JSON-i serialiseerimine ja deserialiseerimine.
+- INotifyPropertyChanged – kasutajaliidese uuendamine andmete muutumisel.
+- ICommand – nuppude ühendamine rakenduse loogikaga.
+- async/await – asünkroonsed toimingud.
+
+PROJEKTI STRUKTUUR
+
+Lahendus koosneb kahest põhiprojektist.
+
+BADHOTEL.CORE
+
+Sisaldab rakenduse põhiloogikat:
+
+- Hotelli töötajate klassid.
+- Töötajate liidesed ja võimed.
+- Hoidlate klassid.
+- Töötajate teisendamise klassid ja DTO-d.
+- Arvutusteenused.
+- Andmesalvestuse liidesed.
+- JSON-salvestuse teostus.
+- Entity Framework Core’i andmete püsisalvestuse klassid.
+
+BADHOTEL.WPF
+
+Sisaldab töölauarakendust:
+
+- MainWindow ja selle XAML-liides.
+- MainViewModel.
+- RelayCommand.
+- Rakenduse käivitamine ja sõltuvuste süstimise seadistus.
+
+ANDMETE SALVESTAMINE
+
+Rakendus toetab hotelliandmete salvestamiseks kaht võimalust.
+
+JSON-SALVESTUS
+
+JSON-i teostus kasutab hotelliandmete salvestamiseks ja laadimiseks `System.Text.Json`-i.
+
+Andmed salvestatakse faili `maailm.json`.
+
+JSON-fail sisaldab töötajate andmeid, sealhulgas:
+
+- Töötaja ID.
+- Töötaja tüüp.
+- Nimi.
+- Energia.
+- Rühm.
+
+Rakendus saab salvestada hotelli praeguse oleku faili ja selle hiljem taastada.
+
+SQL SERVER LOCALDB
+
+Andmebaasi teostus kasutab Entity Framework Core’i koos SQL Server LocalDB-ga.
+
+Andmebaasi nimi on `BadHotelEfDb`.
+
+See sisaldab kaht põhitabelit:
+
+- `Workers` – sisaldab töötajate andmeid.
+- `Groups` – sisaldab töötajate rühmi.
+
+Töötajate ja rühmade vaheline seos on seadistatud võõrvõtme abil.
+
+Andmebaasis on ka piirang, mis takistab töötajate energial langeda alla 0 või tõusta üle 100.
+
+ENTITY FRAMEWORK CORE’I PÄRILUS
+
+Projekt kasutab TPH-pärilusstrateegiat (Table-per-Hierarchy).
+
+See tähendab, et eri tüüpi töötajaid hoitakse samas tabelis `Workers`.
+
+Baasklass on `WorkerEntity`, millel on kolm tuletatud klassi:
+
+- `ReceptionistEntity`
+- `CleanerEntity`
+- `CookEntity`
+
+Entity Framework Core kasutab töötaja tüübi tuvastamiseks eristavat veergu `Type`.
+
+Nii jääb andmebaasi struktuur suhteliselt lihtsaks, kuid rakendus saab siiski töötada eri tüüpi töötajatega.
+
+SÕLTUVUSTE SÜSTIMINE
+
+Sõltuvuste süstimine on seadistatud failis `App.xaml.cs`, kasutades `Microsoft.Extensions.DependencyInjection`-i.
+
+Rakendus registreerib järgmised teenused:
+
+- `IWorldStorage` – Entity Framework Core’i salvestusliides.
+- `EfWorldStorage` – andmebaasi salvestus.
+- `JsonWorldStorage` – JSON-faili salvestus.
+- `MainViewModel` – rakenduse esitusloogika.
+- `MainWindow` – rakenduse peaaken.
+
+Mõlemad salvestuslahendused on saadaval sõltuvuste süstimise konteineri kaudu.
+
+See muudab rakenduse hooldamise lihtsamaks ja vähendab selle komponentide otseseid sõltuvusi üksteisest.
+
+ANDMETE SALVESTAMINE JA LAADIMINE
+
+Peaaknas on neli eraldi nuppu:
+
+| Nupp                 | Eesmärk                              |
+|----------------------|--------------------------------------|
+| Salvesta maailm      | Salvestab hotelliandmed JSON-faili.  |
+| Laadi maailm         | Laadib hotelliandmed JSON-failist.   |
+| Salvesta LocalDB-sse | Salvestab hotelliandmed LocalDB-sse. |
+| Laadi LocalDB-st     | Laadib hotelliandmed LocalDB-st.     |
+
+JSON-i ja andmebaasi salvestuslahendused kasutavad sama `IWorldStorage`-liidest.
+
+See võimaldab rakendusel töötada eri salvestussüsteemidega, ilma et põhiandmemudelit peaks muutma.
+
+ANDMEBAASI MIGRATSIOONID
+
+Andmebaasi muudatuste haldamiseks kasutatakse Entity Framework Core’i migratsioone.
+
+Praegu sisaldab projekt järgmisi migratsioone:
+
+- `InitialEfCore`
+- `AddWorkerTph`
+
+Migratsioonikäske saab käivitada Visual Studio Package Manager Console’is.
+
+Migratsiooni loomine:
+
+    Add-Migration MigrationName -Project BadHotel.Core -StartupProject BadHotel.Wpf -Context HotelDbContext
+
+Migratsioonide rakendamine:
+
+    Update-Database -Project BadHotel.Core -StartupProject BadHotel.Wpf -Context HotelDbContext
+
+Olemasolevate migratsioonide loetlemine:
+
+    Get-Migration -Context HotelDbContext
+
+RAKENDUSE KÄIVITAMINE
+
+Projektiga töötamiseks:
+
+1. Ava Visual Studios `BadHotelNew.sln`.
+2. Veendu, et vajalikud NuGeti paketid oleks taastatud.
+3. Kui vajad andmebaasi funktsioone, veendu, et SQL Server LocalDB oleks saadaval.
+4. Määra käivitusprojektiks `BadHotel.Wpf`.
+5. Koosta lahendus.
+6. Käivita rakendus.
+
+Andmebaasiühendus on seadistatud failis `App.xaml.cs`.
+
+PRAEGUNE ARENGUETAPP
+
+Projektile on lisatud JSON-salvestus, Entity Framework Core, LocalDB tugi, TPH-pärilus ja sõltuvuste süstimine.
+
+Lahendus kompileerub praegu edukalt.
+
+Järgmine samm on salvestustoimingute käivitusaegne testimine ning kontrollimine, et töötajate andmed säilivad salvestamisel ja laadimisel õigesti.
+
+LÕPUMÄRKUS
+
+BadHotel on olnud praktiline viis C#, WPF-i, objektorienteeritud programmeerimise, andmebaasiseoste ja rakenduse arhitektuuri tundmaõppimiseks.
+
+Projekt ühendab mitu mõistet ühes rakenduses ning loob aluse edasisteks arendustöödeks.
 
 
 
