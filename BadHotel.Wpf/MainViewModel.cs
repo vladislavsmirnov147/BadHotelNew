@@ -4,11 +4,15 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using BadHotel.Core;
+using BadHotel.Core.Persistence;
 
 namespace BadHotel.Wpf;
 
 public class MainViewModel : INotifyPropertyChanged
 {
+    private readonly IWorldStorage _worldStorage;
+    private readonly JsonWorldStorage _fileStorage;
+
     private readonly Repository<Receptionist> _receptionists = new();
     private readonly Repository<Cleaner> _cleaners = new();
     private readonly Repository<Cook> _cooks = new();
@@ -20,6 +24,8 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly CalculationService _arvutusteenus = new();
 
     private CancellationTokenSource? _tuhistamiseAllikas;
+
+    private bool _salvestamineKaib;
 
     private string _newWorkerName = string.Empty;
     private string? _selectedWorkerType;
@@ -38,11 +44,8 @@ public class MainViewModel : INotifyPropertyChanged
     private string _koguAeg = "Arvutusi pole veel tehtud.";
 
     public ObservableCollection<HotelWorker> Workers { get; } = new();
-
     public ObservableCollection<HotelWorker> DisplayedWorkers { get; } = new();
-
     public ObservableCollection<string> ActivityLog { get; } = new();
-
     public ObservableCollection<string> WorkerSummary { get; } = new();
 
     public ObservableCollection<string> WorkerTypes { get; } = new()
@@ -229,11 +232,24 @@ public class MainViewModel : INotifyPropertyChanged
     public RelayCommand RemoveCommand { get; }
     public RelayCommand CrazyActionCommand { get; }
 
+    public RelayCommand SaveWorldCommand { get; }
+    public RelayCommand LoadWorldCommand { get; }
+    public RelayCommand SaveDatabaseCommand { get; }
+    public RelayCommand LoadDatabaseCommand { get; }
+
     public RelayCommand AlustaArvutustCommand { get; }
     public RelayCommand TuhistaArvutusCommand { get; }
 
-    public MainViewModel()
+    public MainViewModel(
+        IWorldStorage worldStorage,
+        JsonWorldStorage fileStorage)
     {
+        _worldStorage = worldStorage
+            ?? throw new ArgumentNullException(nameof(worldStorage));
+
+        _fileStorage = fileStorage
+            ?? throw new ArgumentNullException(nameof(fileStorage));
+
         _receptionistReactions =
             new RepositoryReactions<Receptionist>(_receptionists);
 
@@ -265,6 +281,22 @@ public class MainViewModel : INotifyPropertyChanged
             DoCrazyAction,
             () => SelectedWorker is not null);
 
+        SaveWorldCommand = new RelayCommand(
+            () => _ = SaveAsync(_fileStorage, "maailm.json", "Faili"),
+            () => !_salvestamineKaib);
+
+        LoadWorldCommand = new RelayCommand(
+            () => _ = LoadAsync(_fileStorage, "maailm.json", "Failist"),
+            () => !_salvestamineKaib);
+
+        SaveDatabaseCommand = new RelayCommand(
+            () => _ = SaveAsync(_worldStorage, string.Empty, "LocalDB-sse"),
+            () => !_salvestamineKaib);
+
+        LoadDatabaseCommand = new RelayCommand(
+            () => _ = LoadAsync(_worldStorage, string.Empty, "LocalDB-st"),
+            () => !_salvestamineKaib);
+
         AlustaArvutustCommand = new RelayCommand(
             () => _ = AlustaArvutustAsync(),
             SaabArvutustAlustada);
@@ -275,6 +307,141 @@ public class MainViewModel : INotifyPropertyChanged
 
         UpdateDisplayedWorkers();
         UpdateWorkerSummary();
+    }
+
+    private void UuendaSalvestamiskaske()
+    {
+        SaveWorldCommand.RaiseCanExecuteChanged();
+        LoadWorldCommand.RaiseCanExecuteChanged();
+        SaveDatabaseCommand.RaiseCanExecuteChanged();
+        LoadDatabaseCommand.RaiseCanExecuteChanged();
+    }
+
+    private WorldDto CreateWorldDto()
+    {
+        return new WorldDto
+        {
+            Workers = Workers.Select(worker =>
+                WorkerMapper.ToDto(worker, worker.Group)).ToList()
+        };
+    }
+
+    private async Task SaveAsync(
+        IWorldStorage storage,
+        string filePath,
+        string koht)
+    {
+        if (_salvestamineKaib)
+            return;
+
+        _salvestamineKaib = true;
+        UuendaSalvestamiskaske();
+
+        try
+        {
+            WorldDto world = CreateWorldDto();
+
+            await storage.SaveAsync(filePath, world);
+
+            ActivityLog.Add(
+                $"Maailm salvestati edukalt. Asukoht: {koht}. " +
+                $"Töötajaid: {world.Workers.Count}.");
+        }
+        catch (Exception ex)
+        {
+            ActivityLog.Add($"Salvestamise viga: {ex.Message}");
+        }
+        finally
+        {
+            _salvestamineKaib = false;
+            UuendaSalvestamiskaske();
+        }
+    }
+
+    private async Task LoadAsync(
+        IWorldStorage storage,
+        string filePath,
+        string koht)
+    {
+        if (_salvestamineKaib)
+            return;
+
+        _salvestamineKaib = true;
+        UuendaSalvestamiskaske();
+
+        try
+        {
+            WorldDto world = await storage.LoadAsync(filePath);
+
+            List<HotelWorker> loadedWorkers = world.Workers
+                .Select(WorkerMapper.FromDto)
+                .ToList();
+
+            SelectedWorker = null;
+
+            foreach (HotelWorker worker in Workers.ToList())
+                RemoveFromRepository(worker);
+
+            Workers.Clear();
+
+            foreach (HotelWorker worker in loadedWorkers)
+            {
+                AddToRepository(worker);
+                Workers.Add(worker);
+            }
+
+            UpdateDisplayedWorkers();
+            UpdateWorkerSummary();
+
+            ActivityLog.Add(
+                $"Maailm laaditi edukalt. Allikas: {koht}. " +
+                $"Töötajaid: {Workers.Count}.");
+        }
+        catch (Exception ex)
+        {
+            ActivityLog.Add($"Laadimise viga: {ex.Message}");
+        }
+        finally
+        {
+            _salvestamineKaib = false;
+            UuendaSalvestamiskaske();
+        }
+    }
+
+    private void AddToRepository(HotelWorker worker)
+    {
+        switch (worker)
+        {
+            case Receptionist receptionist:
+                _receptionists.Add(receptionist);
+                break;
+
+            case Cleaner cleaner:
+                _cleaners.Add(cleaner);
+                break;
+
+            case Cook cook:
+                _cooks.Add(cook);
+                break;
+        }
+    }
+
+    private void RemoveFromRepository(HotelWorker worker)
+    {
+        switch (worker)
+        {
+            case Receptionist receptionist:
+                _receptionists.Remove(receptionist);
+                break;
+
+            case Cleaner cleaner:
+                _cleaners.Remove(cleaner);
+                break;
+
+            case Cook cook:
+                _cooks.Remove(cook);
+                break;
+        }
     }
 
     private void UuendaArvutuskaske()
@@ -465,46 +632,25 @@ public class MainViewModel : INotifyPropertyChanged
         string teade;
 
         if (SelectedWorker is ICook kokk)
-        {
             teade = kokk.CookMeal();
-        }
         else if (SelectedWorker is IClean koristaja)
-        {
             teade = koristaja.CleanRoom();
-        }
         else if (SelectedWorker is IServe teenindaja)
-        {
             teade = teenindaja.ServeGuest();
-        }
         else
-        {
             teade = $"{SelectedWorker.Name} ei oma erivõimet.";
-        }
 
         ActivityLog.Add(teade);
     }
 
     private void RemoveWorker()
     {
-        if (SelectedWorker is Receptionist vastuvotutootaja)
-        {
-            _receptionists.Remove(vastuvotutootaja);
-        }
-        else if (SelectedWorker is Cleaner koristaja)
-        {
-            _cleaners.Remove(koristaja);
-        }
-        else if (SelectedWorker is Cook kokk)
-        {
-            _cooks.Remove(kokk);
-        }
-        else
-        {
+        if (SelectedWorker is null)
             return;
-        }
 
         HotelWorker eemaldatudTootaja = SelectedWorker;
 
+        RemoveFromRepository(eemaldatudTootaja);
         Workers.Remove(eemaldatudTootaja);
 
         ActivityLog.Add(
@@ -554,16 +700,12 @@ public class MainViewModel : INotifyPropertyChanged
         }
 
         if (SortByName)
-        {
             tulemus = tulemus.OrderBy(tootaja => tootaja.Name);
-        }
 
         DisplayedWorkers.Clear();
 
         foreach (HotelWorker tootaja in tulemus)
-        {
             DisplayedWorkers.Add(tootaja);
-        }
     }
 
     private void UpdateWorkerSummary()
@@ -575,9 +717,7 @@ public class MainViewModel : INotifyPropertyChanged
         WorkerSummary.Clear();
 
         foreach (var grupp in grupid)
-        {
             WorkerSummary.Add($"{grupp.Key}: {grupp.Count()}");
-        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
